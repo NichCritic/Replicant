@@ -1,0 +1,22 @@
+version: "3.7"
+
+services:
+  app:
+    build: ./flask-docker
+    ports:
+      - 80:80
+  neo4j:
+    image: neo4j:latest
+    ports:
+      - 7474:7474
+      - 7687:7687
+    volumes:
+      - ./neo4j/data:/data
+      - ./neo4j/logs:/logs
+      - ./neo4j/import:/var/lib/neo4j/import
+      - ./neo4j/plugins:/plugins
+    environment:
+      - NEO4J_AUTH:neo4j/test
+      - NEO4J_dbms_connector_https_advertised__address:"localhost:7473"
+      - NEO4J_dbms_connector_http_advertised__address:"localhost:7474"
+      - NEO4J_dbms_connector_bolt_advertised__address:"localhost:7687"
