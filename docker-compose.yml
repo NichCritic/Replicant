@@ -5,6 +5,8 @@ services:
     build: ./flask-docker
     ports:
       - 80:80
+    links:
+      - neo4j
   neo4j:
     image: neo4j:latest
     ports:

@@ -1,8 +1,20 @@
-from flask import Flask
+from flask import Flask, jsonify
 from neo4j import GraphDatabase
+import time
 
-uri = "neo4j://neo4j:7687"
-driver = GraphDatabase.driver(uri, auth=("neo4j", "test"))
+tries = 0
+while True:
+	try:
+		uri = "neo4j://neo4j:7687"
+		driver = GraphDatabase.driver(uri, auth=("neo4j", "test"))
+		break
+	except:
+		print("Failed to connect, retry in 5s")
+		time.sleep(5)
+		tries = tries + 1
+		if tries > 10:
+			break
+
 app = Flask(__name__)
 
 def bacon_number(tx):
@@ -19,4 +31,4 @@ def bacon_number(tx):
 def hello_world():
 	with driver.session() as session:
 		result = session.read_transaction(bacon_number)
-		return result 
+		return jsonify(result.data())
