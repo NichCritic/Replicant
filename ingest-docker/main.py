@@ -9,23 +9,23 @@ from os import path
 from neo4j import GraphDatabase
 
 
-def create_movie(tx, title):
-    result = tx.run("CREATE (a:Movie {title:$title}) "
-                    "RETURN a.title + ', from node ' + id(a)", title=title)
+def create_movie(tx, id, title, release_date):
+    result = tx.run("CREATE (a:Movie {id:$id, title:$title, release_date:$date}) "
+                    "RETURN a.title + ', from node ' + id(a)", title=title, date=release_date, id=id)
     return result.single()[0]
 
 
-def create_cast_crew(tx, name):
-    result = tx.run("CREATE (a:Person {name:$name}) "
-                    "RETURN a.name", name=name)
+def create_cast_crew(tx, id, name):
+    result = tx.run("CREATE (a:Person {id:$id, name:$name}) "
+                    "RETURN a.name", id=id, name=name)
     return result.single()[0]
 
 
-def add_cast_assoc(tx, name, title):
-    result = tx.run("MATCH (p:Person {name:$name}) "
-                    "MATCH (m:Movie {title:$title}) "
+def add_cast_assoc(tx, person_id, movie_id):
+    result = tx.run("MATCH (p:Person {id:$person_id}) "
+                    "MATCH (m:Movie {id:$movie_id}) "
                     "CREATE (p)-[rel:CAST_IN]->(m) "
-                    "RETURN p.name + ' joined to ' + m.title", name=name, title=title)
+                    "RETURN p.id + ' joined to ' + m.id", movie_id=movie_id, person_id=person_id)
     ret = result.single()
     if ret == None:
         print(f"Problem joining {name} with {title}")
@@ -62,7 +62,7 @@ def create_movies(session, tx, reader, batch_size, cache):
             tagline, title, video, vote_average, vote_count = line
         movies_by_id[id] = title
         if not title in cache:
-            create_movie(tx, title)
+            create_movie(tx, id, title, release_date)
             cache.add(title)
         if (i + 1) % batch_size == 0:
             break
@@ -74,11 +74,17 @@ def create_all_cast(session, tx, reader, batch_size, cache):
         cast_l = ast.literal_eval(cast)
         # crew_l = ast.literal_eval(crew)
 
+        movie_title = str(id)
+        if id in movies_by_id:
+            movie_title = movies_by_id[id]
+        else:
+            print(f"No title found for id {id}")
+
         for person in cast_l:
-            if person["name"] not in cache:
-                create_cast_crew(tx, person["name"])
-                cache.add(person["name"])
-            add_cast_assoc(tx, person["name"], movies_by_id[id])
+            if person["id"] not in cache:
+                create_cast_crew(tx, person["id"], person["name"])
+                cache.add(person["id"])
+            add_cast_assoc(tx, person["id"], id)
 
         if (i + 1) % batch_size == 0:
             break

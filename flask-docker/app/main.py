@@ -35,5 +35,5 @@ def bacon():
             abort(404)
 
         result = session.run(
-            'MATCH p=shortestPath((bacon:Person {name:"Kevin Bacon"})-[*]-(meg:Person {name:"$name"})) RETURN p', name = name)
+            'MATCH p=shortestPath((bacon:Person {name:"Kevin Bacon"})-[*]-(meg:Person {name:$name})) RETURN p', name = name)
         return jsonify(result.data())
