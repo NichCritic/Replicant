@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from neo4j import GraphDatabase
 import time
 
@@ -24,9 +24,16 @@ def bacon_number(tx):
     return result
 
 
-@app.route('/')
-def hello_world():
+@app.route('/bacon')
+def bacon():
+    name = request.args.get("name")
     with driver.session() as session:
+        match_result = session.run("MATCH (n:Person {name:$name}) "
+                            "RETURN n")
+        person = match_result.single()
+        if person is None:
+            abort(404)
+
         result = session.run(
-            'MATCH p=shortestPath((bacon:Person {name:"Kevin Bacon"})-[*]-(meg:Person {name:"Meg Ryan"})) RETURN p')
+            'MATCH p=shortestPath((bacon:Person {name:"Kevin Bacon"})-[*]-(meg:Person {name:"$name"})) RETURN p', name = name)
         return jsonify(result.data())

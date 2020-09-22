@@ -1,21 +1,22 @@
 import urllib.request
 import zipfile
-from neo4j import GraphDatabase
+import time
 import subprocess
 import csv
 import ast
 import itertools
 from os import path
+from neo4j import GraphDatabase
 
 
 def create_movie(tx, title):
-    result = tx.run("MERGE (a:Movie {title:$title}) "
+    result = tx.run("CREATE (a:Movie {title:$title}) "
                     "RETURN a.title + ', from node ' + id(a)", title=title)
     return result.single()[0]
 
 
 def create_cast_crew(tx, name):
-    result = tx.run("MERGE (a:Person {name:$name}) "
+    result = tx.run("CREATE (a:Person {name:$name}) "
                     "RETURN a.name", name=name)
     return result.single()[0]
 
@@ -23,7 +24,7 @@ def create_cast_crew(tx, name):
 def add_cast_assoc(tx, name, title):
     result = tx.run("MATCH (p:Person {name:$name}) "
                     "MATCH (m:Movie {title:$title}) "
-                    "MERGE (p)-[rel:CAST_IN]->(m) "
+                    "CREATE (p)-[rel:CAST_IN]->(m) "
                     "RETURN p.name + ' joined to ' + m.title", name=name, title=title)
     ret = result.single()
     if ret == None:
@@ -32,7 +33,7 @@ def add_cast_assoc(tx, name, title):
     return ret[0]
 
 
-def create_movies(session, tx, reader, batch_size):
+def create_movies(session, tx, reader, batch_size, cache):
     temp_line = []
     for i, line in enumerate(reader):
         if len(line) < 24 and temp_line == []:
@@ -60,19 +61,23 @@ def create_movies(session, tx, reader, batch_size):
             release_date, revenue, runtime, spoken_languages, status,\
             tagline, title, video, vote_average, vote_count = line
         movies_by_id[id] = title
-        create_movie(tx, title)
+        if not title in cache:
+            create_movie(tx, title)
+            cache.add(title)
         if (i + 1) % batch_size == 0:
             break
 
 
-def create_all_cast(session, tx, reader, batch_size):
+def create_all_cast(session, tx, reader, batch_size, cache):
     for i, line in enumerate(reader):
         cast, crew, id = line
         cast_l = ast.literal_eval(cast)
         # crew_l = ast.literal_eval(crew)
 
         for person in cast_l:
-            create_cast_crew(tx, person["name"])
+            if person["name"] not in cache:
+                create_cast_crew(tx, person["name"])
+                cache.add(person["name"])
             add_cast_assoc(tx, person["name"], movies_by_id[id])
 
         if (i + 1) % batch_size == 0:
@@ -86,6 +91,23 @@ def iterator_is_empty(it):
         return None
     else:
         return itertools.chain([first], it)
+
+def ingest(filename, batch_size, ingest_fn, cache):
+    with open(filename) as file:
+        reader = csv.reader(file)
+        next(reader)
+        count = 0
+        while (reader:= iterator_is_empty(reader)) != None:
+            with driver.session() as session:
+                with session.begin_transaction() as tx:
+                    t1 = time.time()
+                    ingest_fn(session, tx, reader, batch_size, cache)
+                    t2 = time.time()
+                    tx.commit()
+                    count += batch_size
+                    if count >= 50000:
+                        break
+                    print(f"Ingested {batch_size} items in {t2-t1}s. Total items: {count}")
 
 
 if __name__ == "__main__":
@@ -114,35 +136,13 @@ if __name__ == "__main__":
                 break
     print("Done.")
     print("Ingesting movies...")
-    with driver.session() as session:
-        movies_by_id = {}
-        with open("./movies_metadata.csv") as movie_file:
-            reader = csv.reader(movie_file)
-            next(reader)
-            count = 0
-            batch_size = 5000
-            while (reader:= iterator_is_empty(reader)) != None:
-                with session.begin_transaction() as tx:
-                    create_movies(session, tx, reader, batch_size)
-                    tx.commit()
-                    count += batch_size
-                    if count >= 50000:
-                        break
-                    print(f"Ingested {count} movies")
-
-        print("Done.")
-        print("Ingesting actors...")
-        with open("./credits.csv") as credits_file:
-            reader = csv.reader(credits_file)
-            next(reader)
-            count = 0
-            batch_size = 100
-            while (reader:= iterator_is_empty(reader)) != None:
-                with session.begin_transaction() as tx:
-                    create_all_cast(session, tx, reader, batch_size)
-                    tx.commit()
-                    count += batch_size
-                    print(f"Ingested actors from {count} movies")
-                    if count >= 50000:
-                        break
-        print("Done.")
+    movies_by_id = {}
+    movies_cache = set()
+    ingest("./movies_metadata.csv", 5000, create_movies, movies_cache)
+    del movies_cache
+    print("Done.")
+    print("Ingesting actors...")
+    actor_names = set()
+    ingest("./credits.csv", 100, create_all_cast, actor_names)
+    del actor_names   
+    print("Done.")
