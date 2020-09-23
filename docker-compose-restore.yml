@@ -7,10 +7,10 @@ services:
       - 7474:7474
       - 7687:7687
     volumes:
-      - ./neo4jtest/data:/data
-      - ./neo4jtest/logs:/logs
-      - ./neo4jtest/import:/var/lib/neo4j/import
-      - ./neo4jtest/plugins:/plugins
+      - ./neo4j/data:/data
+      - ./neo4j/logs:/logs
+      - ./neo4j/import:/var/lib/neo4j/import
+      - ./neo4j/plugins:/plugins
     environment:
       - NEO4J_AUTH=neo4j/test
       - NEO4J_dbms_connector_https_advertised__address=localhost:7473
