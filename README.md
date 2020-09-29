@@ -13,7 +13,7 @@ Short coding test for replicant
 # Setting up the data
 ## For full ingest (Approx 12 hours):
 1. From the root folder run `docker-compose build` then `docker-compose up -d` to start the webserver and database
-2. From the ingest-docker folder run `docker build -t ingest .` `docker run -it -d --network replican_default ingest` to begin the ingest process. 
+2. From the ingest-docker folder run `docker build -t ingest .` `docker run -it -d --network replicant_default ingest` to begin the ingest process. 
 
  To save (some) time, you can download the movie dataset and put it in the ingest folder as `the-movies-dataset.zip`. It will be copied into the docker image. Otherwise the script will download it from kaggle
 
